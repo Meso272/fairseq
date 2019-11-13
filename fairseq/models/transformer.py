@@ -118,6 +118,7 @@ class TransformerModel(FairseqEncoderDecoderModel):
         parser.add_argument('--share-all-embeddings', action='store_true',
                             help='share encoder, decoder and output embeddings'
                                  ' (requires shared dictionary and embed dim)')
+        parser.add_argument('--embedding_normalization',type=int,help='embedding_normalization',metavar='N')
         parser.add_argument('--no-token-positional-embeddings', default=False, action='store_true',
                             help='if set, disables positional embeddings (outside self attention)')
         parser.add_argument('--adaptive-softmax-cutoff', metavar='EXPR',
@@ -297,6 +298,8 @@ class TransformerEncoder(FairseqEncoder):
         self.dropout = args.dropout
         self.encoder_layerdrop = args.encoder_layerdrop
 
+
+
         embed_dim = embed_tokens.embedding_dim
         self.padding_idx = embed_tokens.padding_idx
         self.max_source_positions = args.max_source_positions
@@ -474,7 +477,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         input_embed_dim = embed_tokens.embedding_dim
         embed_dim = args.decoder_embed_dim
         self.output_embed_dim = args.decoder_output_dim
-
+        self.embedding_normalization=args.embedding_normalization
         self.padding_idx = embed_tokens.padding_idx
         self.max_target_positions = args.max_target_positions
 
@@ -677,7 +680,10 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         if self.adaptive_softmax is None:
             # project back to size of vocabulary
             if self.share_input_output_embed:
-                return F.linear(features, self.embed_tokens.weight)
+                if self.embedding_normalization==1:
+                    return F.linear(features,F.normalize(self.embed_tokens.weight,dim=-1)) 
+                else:
+                    return F.linear(features, self.embed_tokens.weight)
             else:
                 return F.linear(features, self.embed_out)
         else:
@@ -777,6 +783,7 @@ def base_architecture(args):
     args.cross_self_attention = getattr(args, 'cross_self_attention', False)
     args.layer_wise_attention = getattr(args, 'layer_wise_attention', False)
 
+    args.embedding_normalization=getattr(args,'embedding_normalization',0)
     args.decoder_output_dim = getattr(args, 'decoder_output_dim', args.decoder_embed_dim)
     args.decoder_input_dim = getattr(args, 'decoder_input_dim', args.decoder_embed_dim)
 
@@ -794,6 +801,7 @@ def transformer_iwslt_de_en(args):
     args.decoder_ffn_embed_dim = getattr(args, 'decoder_ffn_embed_dim', 1024)
     args.decoder_attention_heads = getattr(args, 'decoder_attention_heads', 4)
     args.decoder_layers = getattr(args, 'decoder_layers', 6)
+    args.embedding_normalization=getattr(args,'embedding_normalization',0)
     base_architecture(args)
 
 
