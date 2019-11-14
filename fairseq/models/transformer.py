@@ -118,6 +118,10 @@ class TransformerModel(FairseqEncoderDecoderModel):
                             help='share encoder, decoder and output embeddings'
                                  ' (requires shared dictionary and embed dim)')
         parser.add_argument('--embedding_normalization',type=int,help='embedding_normalization',metavar='N')
+        parser.add_argument('--outer_embed_normalization',type=int,help='outer embedding_normalization',metavar='N')
+        parser.add_argument('--fac_embed',type=int,help='use_factorized_embedding',metavar='N')
+        parser.add_argument('--d_embed',type=int,help='inner embed dim', metaver='N')
+        parser.add_argument('--ortho_init',type=int,help='orthoinit', metaver='N')
         parser.add_argument('--no-token-positional-embeddings', default=False, action='store_true',
                             help='if set, disables positional embeddings (outside self attention)')
         parser.add_argument('--adaptive-softmax-cutoff', metavar='EXPR',
@@ -166,9 +170,12 @@ class TransformerModel(FairseqEncoderDecoderModel):
 
         src_dict, tgt_dict = task.source_dictionary, task.target_dictionary
 
-        def build_embedding(dictionary, embed_dim, path=None,embedding_normalization=0):
+        def build_embedding(dictionary, embed_dim, path=None,embedding_normalization=0,padding=True):
             num_embeddings = len(dictionary)
-            padding_idx = dictionary.pad()
+            if padding:
+                padding_idx = dictionary.pad()
+            else:
+                padding_idx=None
             if embedding_normalization==3:
                 normed=True
             else:
@@ -191,11 +198,22 @@ class TransformerModel(FairseqEncoderDecoderModel):
             if args.decoder_embed_path and (
                     args.decoder_embed_path != args.encoder_embed_path):
                 raise ValueError('--share-all-embeddings not compatible with --decoder-embed-path')
-            encoder_embed_tokens = build_embedding(
+            if args.fac_embed:
+                encoder_embed_tokens1=build_embedding(src_dict,args.d_embed,args,encoder_embed_path,args.embedding_normalization)
+                encoder_embed_tokens2=Embedding(args.d_embed,arg.encoder_embed_dim,None)
+                if args.embedding_normalization==3:
+                    encoder_embed_tokens2.weight.data=F.normalize(encoder_embed_tokens2,dim=-1)
+                decoder_embed_tokens1=encoder_embed_tokens1
+                decoder_embed_tokens2=encoder_embed_tokens2
+                encoder_embed_tokens=[encoder_embed_tokens1,encoder_embed_tokens2]
+                decoder_embed_tokens=[decoder_embed_tokens1,decoder_embed_tokens2]
+                args.share_decoder_input_output_embed = True
+            else:
+                encoder_embed_tokens = build_embedding(
                 src_dict, args.encoder_embed_dim, args.encoder_embed_path,args.embedding_normalization
             )
-            decoder_embed_tokens = encoder_embed_tokens
-            args.share_decoder_input_output_embed = True
+                decoder_embed_tokens = encoder_embed_tokens
+                args.share_decoder_input_output_embed = True
         else:
             encoder_embed_tokens = build_embedding(
                 src_dict, args.encoder_embed_dim, args.encoder_embed_path,args.embedding_normalization
@@ -337,7 +355,12 @@ class TransformerEncoder(FairseqEncoder):
 
     def forward_embedding(self, src_tokens):
         # embed tokens and positions
-        embed = self.embed_scale * self.embed_tokens(src_tokens)
+        if args.fac_embed:
+            first=self.embed_tokens[0](src_tokens)
+            second=F.linear(first,self.embed_tokens[1].weight.t())
+            embed=self.embed_scale*second
+        else:
+            embed = self.embed_scale * self.embed_tokens(src_tokens)
         if self.embed_positions is not None:
             x = embed + self.embed_positions(src_tokens)
         if self.layernorm_embedding:
@@ -686,35 +709,80 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             # project back to size of vocabulary
             #print(torch.norm(self.embed_tokens.weight,dim=-1))
             if self.share_input_output_embed:
-                if self.embedding_normalization==1:
-                    weight=self.embed_tokens.weight
-                    if self.padding_idx != None:
-                        pid=self.padding_idx if self.padding_idx>=0 else self.embed_tokens.weight.size()[0]+self.padding_idx
-                        norm=torch.cat([torch.norm(weight[:self.padding_idx],dim=-1),torch.tensor([1.0],device='cuda'),torch.norm(weight[self.padding_idx+1:],dim=-1)])
-                    else:
-                        norm=torch.norm(weight,dim=-1)
-                    n_vocab=norm.size()[0]
-                    norm=torch.reshape(norm,(n_vocab,1)).expand(n_vocab,self.output_embed_dim)
-                    #print(torch.norm(self.embed_tokens.weight/norm,dim=-1))
-                    return F.linear(features,self.embed_tokens.weight/norm) 
-                elif self.embedding_normalization==2:
-                    bias=-0.5*(torch.norm(self.embed_tokens.weight,dim=-1)**2)
-                    if self.padding_idx !=None:
-                        bias[self.padding_idx]=1
-                    return F.linear(features, self.embed_tokens.weight,bias)
-                elif self.embedding_normalization==4:
-                    squarenorm=(torch.norm(self.embed_tokens.weight,dim=-1))**2
+                if args.fac_embed:
+                    if args.embedding_normalization==1:
+                        weight2=F.normalize(self.embed_tokens[1].weight,dim=-1)
+                        inter=F.linear(features,weight2)
+                    elif args.embedding_normalization==2:
+
+                        squarenorm=(torch.norm(self.embed_tokens[1].weight,dim=-1))**2
                     #bnorm=torch.norm(self.embed_tokens.weight,dim=-1)
-                    if self.padding_idx>=0:
-                        squarenorm[self.padding_idx]=1
-                    n_vocab=squarenorm.size()[0]
-                    
-                    squarenorm=torch.reshape(squarenorm,(n_vocab,1)).expand(n_vocab,self.output_embed_dim)
+                        squarenorm=torch.reshape(squarenorm,(args.d_embed,1)).expand(args.d_embed,self.output_embed_
+dim)
+
                     #print(squarenorm)
-                    weight=self.embed_tokens.weight/squarenorm
-                    return F.linear(features,weight)
+                        weight2=self.embed_tokens[1].weight/squarenorm
+                        inter=F.linear(features,weight)
+                    
+                    else:
+                        inter=F.linear(features,self.embed_tokens[1].weight)
+                    if args.outer_embed_normalization==1:
+                        weight=self.embed_tokens[0].weight
+                        if self.padding_idx != None:
+                            pid=self.padding_idx if self.padding_idx>=0 else self.embed_tokens.weight.size()[0]+self.padding_idx
+                            norm=torch.cat([torch.norm(weight[:self.padding_idx],dim=-1),torch.tensor([1.0],device='cuda'),torch.norm(weight[self.padding_idx+1:],dim=-1)])
+                        else:
+                            norm=torch.norm(weight,dim=-1)
+                        n_vocab=norm.size()[0]
+                        norm=torch.reshape(norm,(n_vocab,1)).expand(n_vocab,self.output_embed_dim)
+                    #print(torch.norm(self.embed_tokens.weight/norm,dim=-1))
+                        return F.linear(inter,self.embed_tokens[0].weight/norm)
+                    elif args.outer_embed_normalization==2:
+                        squarenorm=(torch.norm(self.embed_tokens[0].weight,dim=-1))**2
+                    #bnorm=torch.norm(self.embed_tokens.weight,dim=-1)
+                        if self.padding_idx>=0:
+                            squarenorm[self.padding_idx]=1
+                        n_vocab=squarenorm.size()[0]
+                        squarenorm=torch.reshape(squarenorm,(n_vocab,1)).expand(n_vocab,self.output_embed_dim)
+                        weight=self.embed_tokens[0].weight/squarenorm
+                        return F.linear(inter,weight)
+                    elif args.outer_embed_normalization==2:
+                        bias=-0.5*(torch.norm(self.embed_tokens[0].weight,dim=-1)**2)
+                        if self.padding_idx !=None:
+                            bias[self.padding_idx]=1
+                        return F.linear(inter, self.embed_tokens[0].weight,bias)
+                    else:
+                        return F.linear(inter,self.embed_tokens[0].weight)
                 else:
-                    return F.linear(features, self.embed_tokens.weight)
+                    if self.embedding_normalization==1:
+                        weight=self.embed_tokens.weight
+                        if self.padding_idx != None:
+                            pid=self.padding_idx if self.padding_idx>=0 else self.embed_tokens.weight.size()[0]+self.padding_idx
+                            norm=torch.cat([torch.norm(weight[:self.padding_idx],dim=-1),torch.tensor([1.0],device='cuda'),torch.norm(weight[self.padding_idx+1:],dim=-1)])
+                        else:
+                            norm=torch.norm(weight,dim=-1)
+                        n_vocab=norm.size()[0]
+                        norm=torch.reshape(norm,(n_vocab,1)).expand(n_vocab,self.output_embed_dim)
+                    #print(torch.norm(self.embed_tokens.weight/norm,dim=-1))
+                        return F.linear(features,self.embed_tokens.weight/norm) 
+                    elif self.embedding_normalization==2:
+                        bias=-0.5*(torch.norm(self.embed_tokens.weight,dim=-1)**2)
+                        if self.padding_idx !=None:
+                            bias[self.padding_idx]=1
+                        return F.linear(features, self.embed_tokens.weight,bias)
+                    elif self.embedding_normalization==4:
+                        squarenorm=(torch.norm(self.embed_tokens.weight,dim=-1))**2
+                    #bnorm=torch.norm(self.embed_tokens.weight,dim=-1)
+                        if self.padding_idx>=0:
+                            squarenorm[self.padding_idx]=1
+                        n_vocab=squarenorm.size()[0]
+                    
+                        squarenorm=torch.reshape(squarenorm,(n_vocab,1)).expand(n_vocab,self.output_embed_dim)
+                    #print(squarenorm)
+                        weight=self.embed_tokens.weight/squarenorm
+                        return F.linear(features,weight)
+                    else:
+                        return F.linear(features, self.embed_tokens.weight)
             else:
                 return F.linear(features, self.embed_out)
         else:
@@ -771,9 +839,13 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
 def Embedding(num_embeddings, embedding_dim, padding_idx):
     m = nn.Embedding(num_embeddings, embedding_dim, padding_idx=padding_idx)
-    nn.init.normal_(m.weight, mean=0, std=embedding_dim ** -0.5)
+    if args.ortho_init:
+        nn.init.orthogonal(m.weight)
+    else:
+        nn.init.normal_(m.weight, mean=0, std=embedding_dim ** -0.5)
     #if normed:
     #    m.weight.data=F.normalize(m.weight,dim=-1)
+    
     nn.init.constant_(m.weight[padding_idx], 0)
     return m
 
@@ -815,15 +887,16 @@ def base_architecture(args):
     args.no_cross_attention = getattr(args, 'no_cross_attention', False)
     args.cross_self_attention = getattr(args, 'cross_self_attention', False)
     args.layer_wise_attention = getattr(args, 'layer_wise_attention', False)
-
+    args.ortho_init=getattr(args,'ortho_init',0)
     args.embedding_normalization=getattr(args,'embedding_normalization',0)
     args.decoder_output_dim = getattr(args, 'decoder_output_dim', args.decoder_embed_dim)
     args.decoder_input_dim = getattr(args, 'decoder_input_dim', args.decoder_embed_dim)
 
     args.no_scale_embedding = getattr(args, 'no_scale_embedding', False)
     args.layernorm_embedding = getattr(args, 'layernorm_embedding', False)
-
-
+    args.fac_embed=getattr(args,'fac_embed',0)
+    args.d_embed=getattr(args,'d_embed',512)
+    args.outer_embed_normalization=getattr(args,'outer_embed_normalization',0)
 @register_model_architecture('transformer', 'transformer_iwslt_de_en')
 def transformer_iwslt_de_en(args):
     args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 512)
