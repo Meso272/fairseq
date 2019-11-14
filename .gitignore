@@ -120,7 +120,7 @@ data-bin/
 *.de
 *.en
 *.tgz
-
+log/
 # reranking
 /examples/reranking/rerank_data
 # Cython-generated C++ source files
