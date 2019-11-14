@@ -173,7 +173,9 @@ class TransformerModel(FairseqEncoderDecoderModel):
                 normed=True
             else:
                 normed=False
-            emb = Embedding(num_embeddings, embed_dim, padding_idx,normed)
+            emb = Embedding(num_embeddings, embed_dim, padding_idx)
+            if embedding_normalization==3:
+                emb.weight.data=F.normalize(emb.weight,dim=-1)
             # if provided, load from preloaded dictionaries
             if path:
                 embed_dict = utils.parse_embedding(path)
@@ -682,19 +684,22 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         """Project features to the vocabulary size."""
         if self.adaptive_softmax is None:
             # project back to size of vocabulary
+            #print(torch.norm(self.embed_tokens.weight,dim=-1))
             if self.share_input_output_embed:
                 if self.embedding_normalization==1:
                     weight=self.embed_tokens.weight
-                    if self.padding_idx>=0:
+                    if self.padding_idx != None:
+                        pid=self.padding_idx if self.padding_idx>=0 else self.embed_tokens.weight.size()[0]+self.padding_idx
                         norm=torch.cat([torch.norm(weight[:self.padding_idx],dim=-1),torch.tensor([1.0],device='cuda'),torch.norm(weight[self.padding_idx+1:],dim=-1)])
                     else:
                         norm=torch.norm(weight,dim=-1)
                     n_vocab=norm.size()[0]
                     norm=torch.reshape(norm,(n_vocab,1)).expand(n_vocab,self.output_embed_dim)
+                    #print(torch.norm(self.embed_tokens.weight/norm,dim=-1))
                     return F.linear(features,self.embed_tokens.weight/norm) 
                 elif self.embedding_normalization==2:
-                    bias=0.5*(torch.norm(self.embed_tokens.weight,dim=-1)**2)
-                    if self.padding_idx>=0:
+                    bias=-0.5*(torch.norm(self.embed_tokens.weight,dim=-1)**2)
+                    if self.padding_idx !=None:
                         bias[self.padding_idx]=1
                     return F.linear(features, self.embed_tokens.weight,bias)
                 elif self.embedding_normalization==4:
@@ -764,11 +769,11 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         return state_dict
 
 
-def Embedding(num_embeddings, embedding_dim, padding_idx,normed=False):
+def Embedding(num_embeddings, embedding_dim, padding_idx):
     m = nn.Embedding(num_embeddings, embedding_dim, padding_idx=padding_idx)
-    if normed:
-        m.weight.data=F.normalize(m.weight,dim=-1)
     nn.init.normal_(m.weight, mean=0, std=embedding_dim ** -0.5)
+    #if normed:
+    #    m.weight.data=F.normalize(m.weight,dim=-1)
     nn.init.constant_(m.weight[padding_idx], 0)
     return m
 
