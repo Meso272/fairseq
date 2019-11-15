@@ -120,8 +120,8 @@ class TransformerModel(FairseqEncoderDecoderModel):
         parser.add_argument('--embedding_normalization',type=int,help='embedding_normalization',metavar='N')
         parser.add_argument('--outer_embed_normalization',type=int,help='outer embedding_normalization',metavar='N')
         parser.add_argument('--fac_embed',type=int,help='use_factorized_embedding',metavar='N')
-        parser.add_argument('--d_embed',type=int,help='inner embed dim', metaver='N')
-        parser.add_argument('--ortho_init',type=int,help='orthoinit', metaver='N')
+        parser.add_argument('--d_embed',type=int,help='inner embed dim', metavar='N')
+        parser.add_argument('--ortho_init',type=int,help='orthoinit', metavar='N')
         parser.add_argument('--no-token-positional-embeddings', default=False, action='store_true',
                             help='if set, disables positional embeddings (outside self attention)')
         parser.add_argument('--adaptive-softmax-cutoff', metavar='EXPR',
@@ -200,7 +200,7 @@ class TransformerModel(FairseqEncoderDecoderModel):
                 raise ValueError('--share-all-embeddings not compatible with --decoder-embed-path')
             if args.fac_embed:
                 encoder_embed_tokens1=build_embedding(src_dict,args.d_embed,args,encoder_embed_path,args.embedding_normalization)
-                encoder_embed_tokens2=Embedding(args.d_embed,arg.encoder_embed_dim,None)
+                encoder_embed_tokens2=Embedding(args.d_embed,arg.encoder_embed_dim,None,args.ortho_init)
                 if args.embedding_normalization==3:
                     encoder_embed_tokens2.weight.data=F.normalize(encoder_embed_tokens2,dim=-1)
                 decoder_embed_tokens1=encoder_embed_tokens1
@@ -355,7 +355,7 @@ class TransformerEncoder(FairseqEncoder):
 
     def forward_embedding(self, src_tokens):
         # embed tokens and positions
-        if args.fac_embed:
+        if isinstance(self.embed_tokens,list):
             first=self.embed_tokens[0](src_tokens)
             second=F.linear(first,self.embed_tokens[1].weight.t())
             embed=self.embed_scale*second
@@ -506,6 +506,9 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         embed_dim = args.decoder_embed_dim
         self.output_embed_dim = args.decoder_output_dim
         self.embedding_normalization=args.embedding_normalization
+        self_outer_embed_normalization=args.outer_embed_normalization
+        self.fac_embed=args.fac_embed
+        self.d_embed=args.d_embed
         self.padding_idx = embed_tokens.padding_idx
         self.max_target_positions = args.max_target_positions
 
@@ -709,16 +712,15 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             # project back to size of vocabulary
             #print(torch.norm(self.embed_tokens.weight,dim=-1))
             if self.share_input_output_embed:
-                if args.fac_embed:
-                    if args.embedding_normalization==1:
+                if self.fac_embed:
+                    if self.embedding_normalization==1:
                         weight2=F.normalize(self.embed_tokens[1].weight,dim=-1)
                         inter=F.linear(features,weight2)
-                    elif args.embedding_normalization==2:
+                    elif self.embedding_normalization==2:
 
                         squarenorm=(torch.norm(self.embed_tokens[1].weight,dim=-1))**2
                     #bnorm=torch.norm(self.embed_tokens.weight,dim=-1)
-                        squarenorm=torch.reshape(squarenorm,(args.d_embed,1)).expand(args.d_embed,self.output_embed_
-dim)
+                        squarenorm=torch.reshape(squarenorm,(args.d_embed,1)).expand(args.d_embed,self.output_embed_dim)
 
                     #print(squarenorm)
                         weight2=self.embed_tokens[1].weight/squarenorm
@@ -726,7 +728,7 @@ dim)
                     
                     else:
                         inter=F.linear(features,self.embed_tokens[1].weight)
-                    if args.outer_embed_normalization==1:
+                    if self.outer_embed_normalization==1:
                         weight=self.embed_tokens[0].weight
                         if self.padding_idx != None:
                             pid=self.padding_idx if self.padding_idx>=0 else self.embed_tokens.weight.size()[0]+self.padding_idx
@@ -737,7 +739,7 @@ dim)
                         norm=torch.reshape(norm,(n_vocab,1)).expand(n_vocab,self.output_embed_dim)
                     #print(torch.norm(self.embed_tokens.weight/norm,dim=-1))
                         return F.linear(inter,self.embed_tokens[0].weight/norm)
-                    elif args.outer_embed_normalization==2:
+                    elif self.outer_embed_normalization==2:
                         squarenorm=(torch.norm(self.embed_tokens[0].weight,dim=-1))**2
                     #bnorm=torch.norm(self.embed_tokens.weight,dim=-1)
                         if self.padding_idx>=0:
@@ -746,7 +748,7 @@ dim)
                         squarenorm=torch.reshape(squarenorm,(n_vocab,1)).expand(n_vocab,self.output_embed_dim)
                         weight=self.embed_tokens[0].weight/squarenorm
                         return F.linear(inter,weight)
-                    elif args.outer_embed_normalization==2:
+                    elif self.outer_embed_normalization==2:
                         bias=-0.5*(torch.norm(self.embed_tokens[0].weight,dim=-1)**2)
                         if self.padding_idx !=None:
                             bias[self.padding_idx]=1
@@ -837,9 +839,9 @@ dim)
         return state_dict
 
 
-def Embedding(num_embeddings, embedding_dim, padding_idx):
+def Embedding(num_embeddings, embedding_dim, padding_idx,ortho_init=False):
     m = nn.Embedding(num_embeddings, embedding_dim, padding_idx=padding_idx)
-    if args.ortho_init:
+    if ortho_init:
         nn.init.orthogonal(m.weight)
     else:
         nn.init.normal_(m.weight, mean=0, std=embedding_dim ** -0.5)
