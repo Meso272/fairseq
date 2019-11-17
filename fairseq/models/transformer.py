@@ -782,7 +782,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                         squarenorm=torch.reshape(squarenorm,(n_vocab,1)).expand(n_vocab,self.output_embed_dim)
                     #print(squarenorm)
                         weight=self.embed_tokens.weight/squarenorm
-                        return F.linear(features,weight)
+                        return -((1-F.linear(features,weight))**2)
                     else:
                         return F.linear(features, self.embed_tokens.weight)
             else:
