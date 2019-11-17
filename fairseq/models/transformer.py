@@ -760,7 +760,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                         weight=self.embed_tokens.weight
                         if self.padding_idx != None:
                             pid=self.padding_idx if self.padding_idx>=0 else self.embed_tokens.weight.size()[0]+self.padding_idx
-                            norm=torch.cat([torch.norm(weight[:self.padding_idx],dim=-1),torch.tensor([1.0],device='cuda'),torch.norm(weight[self.padding_idx+1:],dim=-1)])
+                            norm=torch.cat([torch.norm(weight[:pid],dim=-1),torch.tensor([1.0],device='cuda'),torch.norm(weight[pid+1:],dim=-1)])
                         else:
                             norm=torch.norm(weight,dim=-1)
                         n_vocab=norm.size()[0]
@@ -911,7 +911,18 @@ def transformer_iwslt_de_en(args):
     args.decoder_layers = getattr(args, 'decoder_layers', 6)
     args.embedding_normalization=getattr(args,'embedding_normalization',0)
     base_architecture(args)
-
+@register_model_architecture('transformer', 'transformer_small')
+def transformer_iwslt_small(args):
+    args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 256)
+    args.encoder_ffn_embed_dim = getattr(args, 'encoder_ffn_embed_dim', 1024)
+    args.encoder_attention_heads = getattr(args, 'encoder_attention_heads', 4)
+    args.encoder_layers = getattr(args, 'encoder_layers', 4)
+    args.decoder_embed_dim = getattr(args, 'decoder_embed_dim', 256)
+    args.decoder_ffn_embed_dim = getattr(args, 'decoder_ffn_embed_dim', 1024)
+    args.decoder_attention_heads = getattr(args, 'decoder_attention_heads', 4)
+    args.decoder_layers = getattr(args, 'decoder_layers', 4)
+    args.embedding_normalization=getattr(args,'embedding_normalization',0)
+    base_architecture(args)
 
 @register_model_architecture('transformer', 'transformer_wmt_en_de')
 def transformer_wmt_en_de(args):

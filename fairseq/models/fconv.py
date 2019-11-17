@@ -79,6 +79,7 @@ class FConvModel(FairseqEncoderDecoderModel):
                             help='share input and output embeddings (requires'
                                  ' --decoder-out-embed-dim and --decoder-embed-dim'
                                  ' to be equal)')
+         parser.add_argument('--embedding_normalization',type=int,help='embedding_normalization',metavar='N')
         # fmt: on
 
     @classmethod
@@ -115,6 +116,7 @@ class FConvModel(FairseqEncoderDecoderModel):
             dropout=args.dropout,
             max_positions=args.max_target_positions,
             share_embed=args.share_input_output_embed,
+            embedding_normalization=args.embedding_normalization
         )
         return FConvModel(encoder, decoder)
 
@@ -148,6 +150,8 @@ class FConvEncoder(FairseqEncoder):
         num_embeddings = len(dictionary)
         self.padding_idx = dictionary.pad()
         self.embed_tokens = Embedding(num_embeddings, embed_dim, self.padding_idx)
+        #if embedding_normalization==3:
+            #self.embed_tokens.weight.data=F.normalize(self.embed_tokens.weight,dim=-1)
         if embed_dict:
             self.embed_tokens = utils.load_embedding(embed_dict, self.dictionary, self.embed_tokens)
 
@@ -342,13 +346,13 @@ class FConvDecoder(FairseqIncrementalDecoder):
         self, dictionary, embed_dim=512, embed_dict=None, out_embed_dim=256,
         max_positions=1024, convolutions=((512, 3),) * 20, attention=True,
         dropout=0.1, share_embed=False, positional_embeddings=True,
-        adaptive_softmax_cutoff=None, adaptive_softmax_dropout=0,
+        adaptive_softmax_cutoff=None, adaptive_softmax_dropout=0,embedding_normalization=0
     ):
         super().__init__(dictionary)
         self.register_buffer('version', torch.Tensor([2]))
         self.dropout = dropout
         self.need_attn = True
-
+        self.embedding_normalization=embedding_normalization
         convolutions = extend_conv_spec(convolutions)
         in_channels = convolutions[0][0]
         if isinstance(attention, bool):
@@ -360,7 +364,10 @@ class FConvDecoder(FairseqIncrementalDecoder):
 
         num_embeddings = len(dictionary)
         padding_idx = dictionary.pad()
+        self.padding_idx=padding_idx
         self.embed_tokens = Embedding(num_embeddings, embed_dim, padding_idx)
+        if embedding_normalization==3:
+            self.embed_tokens.weight.data=F.normalize(self.embed_tokens.weight,dim=-1)
         if embed_dict:
             self.embed_tokens = utils.load_embedding(embed_dict, self.dictionary, self.embed_tokens)
 
@@ -407,8 +414,40 @@ class FConvDecoder(FairseqIncrementalDecoder):
                 assert out_embed_dim == embed_dim, \
                     "Shared embed weights implies same dimensions " \
                     " out_embed_dim={} vs embed_dim={}".format(out_embed_dim, embed_dim)
-                self.fc3 = nn.Linear(out_embed_dim, num_embeddings)
-                self.fc3.weight = self.embed_tokens.weight
+                
+                if self.embedding_normalization==1:
+                    self.fc3 = nn.Linear(out_embed_dim, num_embeddings,bias=False)
+                    weight=self.embed_tokens.weight
+                    if self.padding_idx != None:
+                        pid=self.padding_idx if self.padding_idx>=0 else self.embed_tokens.weight.size()[0]+self.padding_idx
+                        norm=torch.cat([torch.norm(weight[:pid],dim=-1),torch.tensor([1.0],device='cuda'),torch.norm(weight[pid+1:],dim=-1)])
+                    else:
+                        norm=torch.norm(weight,dim=-1)
+                    n_vocab=norm.size()[0]
+                    norm=torch.reshape(norm,(n_vocab,1)).expand(n_vocab,self.output_embed_dim)
+                    self.fc3.weight.data=self.embed_tokens.weight/norm
+                elif self.embedding_normalization==2:
+                    self.fc3 = nn.Linear(out_embed_dim, num_embeddings,bias=False)
+                    self.fc3 = nn.Linear(out_embed_dim, num_embeddings)
+                    self.fc3.weight = self.embed_tokens.weight
+                    bias=-0.5*(torch.norm(self.embed_tokens.weight,dim=-1)**2)
+                        if self.padding_idx !=None:
+                            bias[self.padding_idx]=1
+                    self.fc3.bias.data=bias
+                elif self.embedding_normalization==4:
+                    squarenorm=(torch.norm(self.embed_tokens.weight,dim=-1))**2
+                    #bnorm=torch.norm(self.embed_tokens.weight,dim=-1)
+                    if self.padding_idx>=0:
+                        squarenorm[self.padding_idx]=1
+                    n_vocab=squarenorm.size()[0]
+                    
+                    squarenorm=torch.reshape(squarenorm,(n_vocab,1)).expand(n_vocab,self.output_embed_dim)
+                    #print(squarenorm)
+                    weight=self.embed_tokens.weight/squarenorm
+                    self.fc3.weight.data=weight
+                else:
+                    self.fc3 = nn.Linear(out_embed_dim, num_embeddings,bias=False)
+                    self.fc3.weight = self.embed_tokens.weight
             else:
                 self.fc3 = Linear(out_embed_dim, num_embeddings, dropout=dropout)
 
@@ -484,6 +523,8 @@ class FConvDecoder(FairseqIncrementalDecoder):
             x = self.fc2(x)
             x = F.dropout(x, p=self.dropout, training=self.training)
             x = self.fc3(x)
+            if self.embedding_normalization==4:
+                x=-(1-x)**2
 
         return x, avg_attn_scores
 
@@ -611,6 +652,7 @@ def base_architecture(args):
     args.decoder_out_embed_dim = getattr(args, 'decoder_out_embed_dim', 256)
     args.decoder_attention = getattr(args, 'decoder_attention', 'True')
     args.share_input_output_embed = getattr(args, 'share_input_output_embed', False)
+    args.embedding_normalization = getattr(args,'embedding_normalization',0)
 
 
 @register_model_architecture('fconv', 'fconv_iwslt_de_en')
