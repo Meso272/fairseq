@@ -79,7 +79,7 @@ class FConvModel(FairseqEncoderDecoderModel):
                             help='share input and output embeddings (requires'
                                  ' --decoder-out-embed-dim and --decoder-embed-dim'
                                  ' to be equal)')
-         parser.add_argument('--embedding_normalization',type=int,help='embedding_normalization',metavar='N')
+        parser.add_argument('--embedding_normalization',type=int,help='embedding_normalization',metavar='N')
         # fmt: on
 
     @classmethod
