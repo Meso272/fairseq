@@ -523,8 +523,8 @@ class FConvDecoder(FairseqIncrementalDecoder):
             x = self.fc2(x)
             x = F.dropout(x, p=self.dropout, training=self.training)
             x = self.fc3(x)
-            if self.embedding_normalization==4:
-                x=-(1-x)**2
+            #if self.embedding_normalization==4:
+            #    x=-(1-x)**2
 
         return x, avg_attn_scores
 
