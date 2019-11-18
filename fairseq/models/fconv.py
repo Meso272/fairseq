@@ -427,14 +427,15 @@ class FConvDecoder(FairseqIncrementalDecoder):
                     norm=torch.reshape(norm,(n_vocab,1)).expand(n_vocab,self.output_embed_dim)
                     self.fc3.weight.data=self.embed_tokens.weight/norm
                 elif self.embedding_normalization==2:
-                    self.fc3 = nn.Linear(out_embed_dim, num_embeddings,bias=False)
+
                     self.fc3 = nn.Linear(out_embed_dim, num_embeddings)
                     self.fc3.weight = self.embed_tokens.weight
                     bias=-0.5*(torch.norm(self.embed_tokens.weight,dim=-1)**2)
-                        if self.padding_idx !=None:
-                            bias[self.padding_idx]=1
+                    if self.padding_idx !=None:
+                        bias[self.padding_idx]=1
                     self.fc3.bias.data=bias
                 elif self.embedding_normalization==4:
+                    self.fc3 = nn.Linear(out_embed_dim, num_embeddings,bias=False)
                     squarenorm=(torch.norm(self.embed_tokens.weight,dim=-1))**2
                     #bnorm=torch.norm(self.embed_tokens.weight,dim=-1)
                     if self.padding_idx>=0:
