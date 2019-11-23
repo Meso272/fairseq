@@ -87,7 +87,7 @@ done
 echo "creating train, valid, test..."
 for l in $src $tgt; do
     #awk '{if (NR%23 == 0) print $0; }' $tmp/train.tags.es-en.$l > $tmp/valid.$l
-    awk '{if 1  print $0; }' $tmp/train.tags.ro-en.$l > $tmp/train.$l
+    awk  $tmp/train.tags.ro-en.$l > $tmp/train.$l
     cat $tmp/IWSLT14.TED.dev2010.ro-en.$l \
         > $tmp/valid.$l
     cat $tmp/IWSLT14.TED.tst2010.ro-en.$l \
