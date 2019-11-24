@@ -16,7 +16,7 @@ BPEROOT=subword-nmt/subword_nmt
 BPE_TOKENS=10000
 
 URL="https://wit3.fbk.eu/archive/2014-01/texts/ro/en/ro-en.tgz"
-GZ=es-en.tgz
+GZ=ro-en.tgz
 
 if [ ! -d "$SCRIPTS" ]; then
     echo "Please set SCRIPTS variable correctly to point to Moses scripts."
