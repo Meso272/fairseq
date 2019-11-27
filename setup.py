@@ -97,6 +97,23 @@ else:
     dependency_links = []
 
 
+if 'clean' in sys.argv[1:]:
+    # Source: https://bit.ly/2NLVsgE
+    print("deleting Cython files...")
+    import subprocess
+    subprocess.run(['rm -f fairseq/*.so fairseq/**/*.so'], shell=True)
+
+
+if 'test' in sys.argv[1:]:
+    try:
+        import fairseq.data.token_block_utils_fast
+    except (ImportError, ModuleNotFoundError):
+        raise Exception(
+            'Please install Cython components with `python setup.py build_ext --inplace`'
+            'before running unit tests.'
+        )
+
+
 setup(
     name='fairseq',
     version='0.8.0',
