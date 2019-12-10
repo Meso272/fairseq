@@ -103,6 +103,7 @@ class LightConvModel(FairseqEncoderDecoderModel):
                                  'Must be used with adaptive_loss criterion'),
         parser.add_argument('--adaptive-softmax-dropout', type=float, metavar='D',
                             help='sets adaptive softmax dropout for the tail projections')
+        parser.add_argument('--embedding_normalization',type=int,help='embedding_normalization',metavar='N')
 
         """LightConv and DynamicConv arguments"""
         parser.add_argument('--encoder-kernel-size-list', type=lambda x: options.eval_str_list(x, int),
@@ -137,10 +138,16 @@ class LightConvModel(FairseqEncoderDecoderModel):
 
         src_dict, tgt_dict = task.source_dictionary, task.target_dictionary
 
-        def build_embedding(dictionary, embed_dim, path=None):
+        def build_embedding(dictionary, embed_dim, path=None,embedding_normalization=0):
             num_embeddings = len(dictionary)
             padding_idx = dictionary.pad()
+            if embedding_normalization==3:
+                normed=True
+            else:
+                normed=False
             emb = Embedding(num_embeddings, embed_dim, padding_idx)
+            if embedding_normalization==3:
+                emb.weight.data=F.normalize(emb.weight,dim=-1)
             # if provided, load from preloaded dictionaries
             if path:
                 embed_dict = utils.parse_embedding(path)
@@ -157,16 +164,16 @@ class LightConvModel(FairseqEncoderDecoderModel):
                     args.decoder_embed_path != args.encoder_embed_path):
                 raise RuntimeError('--share-all-embeddings not compatible with --decoder-embed-path')
             encoder_embed_tokens = build_embedding(
-                src_dict, args.encoder_embed_dim, args.encoder_embed_path
+                src_dict, args.encoder_embed_dim, args.encoder_embed_path, args.embedding_normalization
             )
             decoder_embed_tokens = encoder_embed_tokens
             args.share_decoder_input_output_embed = True
         else:
             encoder_embed_tokens = build_embedding(
-                src_dict, args.encoder_embed_dim, args.encoder_embed_path
+                src_dict, args.encoder_embed_dim, args.encoder_embed_path, args.embedding_normalization
             )
             decoder_embed_tokens = build_embedding(
-                tgt_dict, args.decoder_embed_dim, args.decoder_embed_path
+                tgt_dict, args.decoder_embed_dim, args.decoder_embed_path, args.embedding_normalization
             )
 
         encoder = LightConvEncoder(args, src_dict, encoder_embed_tokens)
@@ -302,9 +309,9 @@ class LightConvDecoder(FairseqIncrementalDecoder):
 
         self.embed_tokens = embed_tokens
         self.embed_scale = math.sqrt(embed_dim)  # todo: try with input_embed_dim
-
+   
         self.project_in_dim = Linear(input_embed_dim, embed_dim, bias=False) if embed_dim != input_embed_dim else None
-
+        self.embedding_normalization=args.embedding_normalization
         self.embed_positions = PositionalEmbedding(
             args.max_target_positions, embed_dim, padding_idx,
             learned=args.decoder_learned_pos,
@@ -405,7 +412,36 @@ class LightConvDecoder(FairseqIncrementalDecoder):
         if self.adaptive_softmax is None:
             # project back to size of vocabulary
             if self.share_input_output_embed:
-                x = F.linear(x, self.embed_tokens.weight)
+                #x = F.linear(x, self.embed_tokens.weight)
+                if self.embedding_normalization==1:
+                    weight=self.embed_tokens.weight
+                    if self.padding_idx != None:
+                        pid=self.padding_idx if self.padding_idx>=0 else self.embed_tokens.weight.size()[0]+self.padding_idx
+                        norm=torch.cat([torch.norm(weight[:pid],dim=-1),torch.tensor([1.0],device='cuda'),torch.norm(weight[pid+1:],dim=-1)])
+                    else:
+                        norm=torch.norm(weight,dim=-1)
+                    n_vocab=norm.size()[0]
+                    norm=torch.reshape(norm,(n_vocab,1)).expand(n_vocab,self.output_embed_dim)
+                #print(torch.norm(self.embed_tokens.weight/norm,dim=-1))
+                    x=F.linear(x,self.embed_tokens.weight/norm) 
+                elif self.embedding_normalization==2:
+                    bias=-0.5*(torch.norm(self.embed_tokens.weight,dim=-1)**2)
+                    if self.padding_idx !=None:
+                        bias[self.padding_idx]=1
+                    x=F.linear(x, self.embed_tokens.weight,bias)
+                elif self.embedding_normalization==4:
+                    squarenorm=(torch.norm(self.embed_tokens.weight,dim=-1))**2
+                #bnorm=torch.norm(self.embed_tokens.weight,dim=-1)
+                    if self.padding_idx>=0:
+                        squarenorm[self.padding_idx]=1
+                    n_vocab=squarenorm.size()[0]
+                    
+                    squarenorm=torch.reshape(squarenorm,(n_vocab,1)).expand(n_vocab,self.output_embed_dim)
+                    #print(squarenorm)
+                    weight=self.embed_tokens.weight/squarenorm
+                    x=F.linear(x,weight)
+                else:
+                    x = F.linear(x, self.embed_tokens.weight)
             else:
                 x = F.linear(x, self.embed_out)
 
@@ -705,6 +741,7 @@ def base_architecture(args):
     args.decoder_glu = getattr(args, 'decoder_glu', True)
     args.input_dropout = getattr(args, 'input_dropout', 0.1)
     args.weight_dropout = getattr(args, 'weight_dropout', args.attention_dropout)
+    args.embedding_normalization=getattr(args,"embedding_normalization",0)
 
 
 @register_model_architecture('lightconv', 'lightconv_iwslt_de_en')

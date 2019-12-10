@@ -149,6 +149,8 @@ class TransformerModel(FairseqEncoderDecoderModel):
                             help='add layernorm to embedding')
         parser.add_argument('--no-scale-embedding', action='store_true',
                             help='if True, dont scale embeddings')
+        parser.add_argument('--output_embed_normalization',type=int,metavar='N')
+        parser.add_argument('--output_proj_normalization',type=int,metavar='N')
         # fmt: on
 
     @classmethod
@@ -546,6 +548,9 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 adaptive_inputs=embed_tokens if args.tie_adaptive_weights else None,
                 factor=args.adaptive_softmax_factor,
                 tie_proj=args.tie_adaptive_proj,
+                padding_idx=self.padding_idx
+                embed_normalization=args.output_embed_normalization
+                proj_normalization=args.output_proj_normalization
             )
         elif not self.share_input_output_embed:
             self.embed_out = nn.Parameter(torch.Tensor(len(dictionary), self.output_embed_dim))
@@ -899,6 +904,9 @@ def base_architecture(args):
     args.fac_embed=getattr(args,'fac_embed',0)
     args.d_embed=getattr(args,'d_embed',512)
     args.outer_embed_normalization=getattr(args,'outer_embed_normalization',0)
+
+    args.output_embed_normalization=getattr(args,'input_embed_normalization',0)
+    args.output_proj_normalization=getattr(args,'output_proj_normalization',0)
 @register_model_architecture('transformer', 'transformer_iwslt_de_en')
 def transformer_iwslt_de_en(args):
     args.encoder_embed_dim = getattr(args, 'encoder_embed_dim', 512)

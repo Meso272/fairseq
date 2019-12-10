@@ -12,22 +12,62 @@ from torch import nn
 
 
 class TiedLinear(nn.Module):
-    def __init__(self, weight, transpose):
+    def __init__(self, weight, transpose,normalization=0,padding_idx=None):
         super().__init__()
-        self.weight = weight
+        
+
         self.transpose = transpose
+        #self.weight = weight
+        if normalization==1:
+            if transpose:
+                norm_dim=0
+                vocab_dim=-1
+            else:
+                norm_dim=-1
+                vocab_dim=0
+            if padding_idx != None:
+                id=self.padding_idx if self.padding_idx>=0 else self.embed_tokens.weight.size()[0]+self.padding_idx
+                norm=torch.cat([torch.norm(weight[:pid],dim=-1),torch.tensor([1.0],device='cuda'),torch.norm(weight[pid+1:],dim=norm_dim)])
+            else:
+                norm=torch.norm(weight,dim=norm_dim)
+            n_vocab=weight.size()[vocab_dim]
+            d_embed=weight.size()[norm_dim]
+            if transpose:
+                norm=torch.reshape(norm,(1,n_vocab)).expand(d_embed,n_vocab)
+            else:
+                norm=torch.reshape(norm,(n_vocab,1)).expand(n_vocab,d_embed)
+            self.weight=weight/norm
+        elif normalization==2:
+            pass
+        else:
+            self.weight=weight
+        if normalization==3:
+            if transpose:
+                norm_dim=0
+                vocab_dim=-1
+            else:
+                norm_dim=-1
+                vocab_dim=0
+            bias=-0.5*(torch.norm(weight,dim=norm_dim)**2)
+            if padding_idx !=None:
+                bias[padding_idx]=1
+            self.bias=bias
+        else:
+            self.bias=None
+        
+
 
     def forward(self, input):
-        return F.linear(input, self.weight.t() if self.transpose else self.weight)
+        return F.linear(input, self.weight.t() if self.transpose else self.weight,bias=self.bias)
 
 
 class TiedHeadModule(nn.Module):
-    def __init__(self, weights, input_dim, num_classes):
+    def __init__(self, weights, input_dim, num_classes,embed_normalization=0, padding_idx=None):
         super().__init__()
         tied_emb, _ = weights
         self.num_words, emb_dim = tied_emb.size()
 
-        self.word_proj = TiedLinear(tied_emb, transpose=False)
+        self.word_proj = TiedLinear(tied_emb, transpose=False,normalization=embed_normalization,padding_idx=padding_idx)
         if input_dim != emb_dim:
             self.word_proj = nn.Sequential(
                 nn.Linear(input_dim, emb_dim, bias=False),
@@ -54,7 +94,7 @@ class AdaptiveSoftmax(nn.Module):
     approximation for GPUs" (http://arxiv.org/abs/1609.04309).
     """
 
-    def __init__(self, vocab_size, input_dim, cutoff, dropout, factor=4., adaptive_inputs=None, tie_proj=False):
+    def __init__(self, vocab_size, input_dim, cutoff, dropout, factor=4., adaptive_inputs=None, tie_proj=False,padding_idx=None,embed_normalization=0,proj_normalization=0):
         super().__init__()
 
         if vocab_size > cutoff[-1]:
@@ -74,11 +114,11 @@ class AdaptiveSoftmax(nn.Module):
         self.lsm = nn.LogSoftmax(dim=1)
 
         if adaptive_inputs is not None:
-            self.head = TiedHeadModule(adaptive_inputs.weights_for_band(0), input_dim, len(cutoff) - 1)
+            self.head = TiedHeadModule(adaptive_inputs.weights_for_band(0), input_dim, len(cutoff) - 1,embed_normalization,padding_idx)
         else:
             self.head = nn.Linear(input_dim, output_dim, bias=False)
 
-        self._make_tail(adaptive_inputs, tie_proj)
+        self._make_tail(adaptive_inputs, tie_proj,embed_normalization,proj_normalization)
 
         def init_weights(m):
             if hasattr(m, 'weight') and not isinstance(m, TiedLinear) and not isinstance(m, TiedHeadModule):
@@ -88,7 +128,7 @@ class AdaptiveSoftmax(nn.Module):
 
         self.register_buffer('version', torch.LongTensor([1]))
 
-    def _make_tail(self, adaptive_inputs=None, tie_proj=False):
+    def _make_tail(self, adaptive_inputs=None, tie_proj=False,embed_normalization=0,proj_normalization=0):
         self.tail = nn.ModuleList()
         for i in range(len(self.cutoff) - 1):
             dim = int(self.input_dim // self.factor ** (i + 1))
@@ -98,7 +138,7 @@ class AdaptiveSoftmax(nn.Module):
 
             if tied_proj is not None:
                 if tie_proj:
-                    proj = TiedLinear(tied_proj, transpose=True)
+                    proj = TiedLinear(tied_proj, transpose=True,normalization=proj_normalization)
                 else:
                     proj = nn.Linear(tied_proj.size(0), tied_proj.size(1), bias=False)
             else:
@@ -109,7 +149,7 @@ class AdaptiveSoftmax(nn.Module):
                 nn.Dropout(self.dropout),
                 nn.Linear(
                     dim, self.cutoff[i + 1] - self.cutoff[i], bias=False,
-                ) if tied_emb is None else TiedLinear(tied_emb, transpose=False),
+                ) if tied_emb is None else TiedLinear(tied_emb, transpose=False,normalization=embed_normalization),
             )
 
             self.tail.append(m)

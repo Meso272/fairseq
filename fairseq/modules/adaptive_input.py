@@ -20,6 +20,8 @@ class AdaptiveInput(nn.Module):
         factor: float,
         output_dim: int,
         cutoff: List[int],
+        embed_normalization:int,#1:head only, 2:all
+        proj_normalization:int#only tail
     ):
         super().__init__()
 
@@ -42,6 +44,10 @@ class AdaptiveInput(nn.Module):
                 nn.Embedding(size, dim, padding_idx),
                 nn.Linear(dim, output_dim, bias=False)
             )
+            if (i==0 and head_embed_normalization>0) or (i>0 and head_embed_normalization==2):
+                seq[0].weight.data=F.normalize(seq[0].weight,dim=-1)
+            if i>0 and tail_proj_normalization:
+                seq[1].weight.data=F.normalize(seq[1].weight,dim=-1)                
             self.embeddings.append(seq)
 
         def init_weights(m):

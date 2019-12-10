@@ -115,6 +115,10 @@ class TransformerLanguageModel(FairseqLanguageModel):
                             help='add layernorm to embedding')
         parser.add_argument('--no-scale-embedding', action='store_true',
                             help='if True, dont scale embeddings')
+        parser.add_argument('--input_embed_normalization',type=int,metavar='N')
+        parser.add_argument('--input_proj_normalization',type=int,metavar='N')
+        parser.add_argument('--output_embed_normalization',type=int,metavar='N')
+        parser.add_argument('--output_proj_normalization',type=int,metavar='N')
         # fmt: on
 
     @classmethod
@@ -140,7 +144,7 @@ class TransformerLanguageModel(FairseqLanguageModel):
             embed_tokens = AdaptiveInput(
                 len(task.source_dictionary), task.source_dictionary.pad(), args.decoder_input_dim,
                 args.adaptive_input_factor, args.decoder_embed_dim,
-                options.eval_str_list(args.adaptive_input_cutoff, type=int),
+                options.eval_str_list(args.adaptive_input_cutoff, type=int),args.input_embed_normalization,args.input_proj_normalization
             )
         else:
             embed_tokens = Embedding(len(task.source_dictionary), args.decoder_input_dim, task.source_dictionary.pad())
@@ -204,7 +208,10 @@ def base_lm_architecture(args):
 
     args.no_scale_embedding = getattr(args, 'no_scale_embedding', False)
     args.layernorm_embedding = getattr(args, 'layernorm_embedding', False)
-
+    args.input_embed_normalization=getattr(args,'input_embed_normalization',0)
+    args.input_proj_normalization=getattr(args,'input_proj_normalization',0)
+    args.output_embed_normalization=getattr(args,'input_embed_normalization',0)
+    args.output_proj_normalization=getattr(args,'output_proj_normalization',0)
 
 @register_model_architecture('transformer_lm', 'transformer_lm_big')
 def transformer_lm_big(args):
