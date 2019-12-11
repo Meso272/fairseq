@@ -116,13 +116,17 @@ ENV/
 
 # data
 data-bin/
-*.xml
-*.de
-*.en
-*.tgz
-log/
+
 # reranking
 /examples/reranking/rerank_data
+
 # Cython-generated C++ source files
 /fairseq/data/data_utils_fast.cpp
 /fairseq/data/token_block_utils_fast.cpp
+
+# VSCODE
+.vscode/ftp-sync.json
+.vscode/settings.json
+
+# Experimental Folder
+experimental/*
