@@ -304,7 +304,7 @@ class LightConvDecoder(FairseqIncrementalDecoder):
         embed_dim = args.decoder_embed_dim
         output_embed_dim = args.decoder_output_dim
 
-        padding_idx = embed_tokens.padding_idx
+        self.padding_idx = embed_tokens.padding_idx
         self.max_target_positions = args.max_target_positions
 
         self.embed_tokens = embed_tokens
@@ -313,7 +313,7 @@ class LightConvDecoder(FairseqIncrementalDecoder):
         self.project_in_dim = Linear(input_embed_dim, embed_dim, bias=False) if embed_dim != input_embed_dim else None
         self.embedding_normalization=args.embedding_normalization
         self.embed_positions = PositionalEmbedding(
-            args.max_target_positions, embed_dim, padding_idx,
+            args.max_target_positions, embed_dim, self.padding_idx,
             learned=args.decoder_learned_pos,
         ) if not args.no_token_positional_embeddings else None
 
