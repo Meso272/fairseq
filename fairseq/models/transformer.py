@@ -548,8 +548,8 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 adaptive_inputs=embed_tokens if args.tie_adaptive_weights else None,
                 factor=args.adaptive_softmax_factor,
                 tie_proj=args.tie_adaptive_proj,
-                padding_idx=self.padding_idx
-                embed_normalization=args.output_embed_normalization
+                padding_idx=self.padding_idx,
+                embed_normalization=args.output_embed_normalization,
                 proj_normalization=args.output_proj_normalization
             )
         elif not self.share_input_output_embed:
