@@ -170,7 +170,7 @@ class LightConvModel(FairseqEncoderDecoderModel):
             args.share_decoder_input_output_embed = True
         else:
             encoder_embed_tokens = build_embedding(
-                src_dict, args.encoder_embed_dim, args.encoder_embed_path, args.embedding_normalization
+                src_dict, args.encoder_embed_dim, args.encoder_embed_path
             )
             decoder_embed_tokens = build_embedding(
                 tgt_dict, args.decoder_embed_dim, args.decoder_embed_path, args.embedding_normalization
