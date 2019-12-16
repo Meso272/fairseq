@@ -326,7 +326,7 @@ class LightConvDecoder(FairseqIncrementalDecoder):
         self.adaptive_softmax = None
 
         self.project_out_dim = Linear(embed_dim, output_embed_dim, bias=False) \
-            if embed_dim != output_embed_dim and not args.tie_adaptive_weights else None
+            if embed_dim != self.output_embed_dim and not args.tie_adaptive_weights else None
 
         if args.adaptive_softmax_cutoff is not None:
             self.adaptive_softmax = AdaptiveSoftmax(
