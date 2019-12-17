@@ -417,7 +417,7 @@ class LightConvDecoder(FairseqIncrementalDecoder):
                     weight=self.embed_tokens.weight
                     if self.padding_idx != None:
                         pid=self.padding_idx if self.padding_idx>=0 else self.embed_tokens.weight.size()[0]+self.padding_idx
-                        if weight.data.type()=="torch.float16":
+                        if weight.data.type()=="torch.float16" or weight.data.type()=="torch.half":
                             dtype=torch.float16
                         else:
                             dtype=torch.float32
