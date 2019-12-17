@@ -766,7 +766,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                         
                         if self.padding_idx != None:
                             pid=self.padding_idx if self.padding_idx>=0 else self.embed_tokens.weight.size()[0]+self.padding_idx
-                            print(weight.data.type())
+                           
                             if weight.data.type()=="torch.cuda.HalfTensor":
                                 dtype=torch.float16
                             else:
@@ -801,7 +801,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                         weight=self.embed_tokens.weight/squarenorm
                         return F.linear(features,weight)
                     else:
-                        print(self.embed_tokens.weight.data.type())
+
                         return F.linear(features, self.embed_tokens.weight)
             else:
                 return F.linear(features, self.embed_out)
