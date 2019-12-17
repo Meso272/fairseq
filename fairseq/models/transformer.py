@@ -766,6 +766,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                         
                         if self.padding_idx != None:
                             pid=self.padding_idx if self.padding_idx>=0 else self.embed_tokens.weight.size()[0]+self.padding_idx
+                            print(weight.data.type())
                             if weight.data.type()=="torch.float16" or weight.data.type()=="torch.half":
                                 dtype=torch.float16
                             else:
