@@ -766,7 +766,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                         
                         if self.padding_idx != None:
                             pid=self.padding_idx if self.padding_idx>=0 else self.embed_tokens.weight.size()[0]+self.padding_idx
-                            norm=torch.cat([torch.norm(weight[:pid],dim=-1),torch.tensor([1],device='cuda'),torch.norm(weight[pid+1:],dim=-1)])
+                            norm=torch.cat([torch.norm(weight[:pid],dim=-1),torch.tensor([1.0],device='cuda',dtype=weight.data.type()),torch.norm(weight[pid+1:],dim=-1)])
                         else:
                             norm=torch.norm(weight,dim=-1)
 
