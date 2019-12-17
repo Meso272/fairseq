@@ -774,8 +774,10 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                         else:
                             norm=torch.norm(weight,dim=-1)
                         '''
-                        norm=torch.norm(weight,dim=-1)
+                        norm=torch.norm(self.embed_tokens.weight,dim=-1)
+                        print(self.padding_idx)
                         if self.padding_idx != None:
+
                             norm[self.padding_idx]=1
                         
 
@@ -792,10 +794,11 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                     elif self.embedding_normalization==4:
                         squarenorm=(torch.norm(self.embed_tokens.weight,dim=-1))**2
                     #bnorm=torch.norm(self.embed_tokens.weight,dim=-1)
-                        if self.padding_idx>=0:
+                        if self.padding_idx!=None:
+                            print(self.padding_idx)
                             squarenorm[self.padding_idx]=1
                         n_vocab=squarenorm.size()[0]
-                    
+                     
                         squarenorm=torch.reshape(squarenorm,(n_vocab,1)).expand(n_vocab,self.output_embed_dim)
                     #print(squarenorm)
                         weight=self.embed_tokens.weight/squarenorm
