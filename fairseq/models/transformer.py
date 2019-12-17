@@ -801,6 +801,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                         weight=self.embed_tokens.weight/squarenorm
                         return F.linear(features,weight)
                     else:
+                        print(weight.data.type())
                         return F.linear(features, self.embed_tokens.weight)
             else:
                 return F.linear(features, self.embed_out)
