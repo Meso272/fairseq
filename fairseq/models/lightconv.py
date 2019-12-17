@@ -417,13 +417,22 @@ class LightConvDecoder(FairseqIncrementalDecoder):
                     weight=self.embed_tokens.weight
                     if self.padding_idx != None:
                         pid=self.padding_idx if self.padding_idx>=0 else self.embed_tokens.weight.size()[0]+self.padding_idx
-                        norm=torch.cat([torch.norm(weight[:pid],dim=-1),torch.tensor([1.0],device='cuda'),torch.norm(weight[pid+1:],dim=-1)])
+                        if weight.data.type()=="torch.float16":
+                            dtype=torch.float16
+                        else:
+                            dtype=torch.float32
+                        norm=torch.cat([torch.norm(weight[:pid],dim=-1),torch.tensor([1.0],device='cuda',dtype=dtype),torch.norm(weight[pid+1:],dim=-1)])
                     else:
                         norm=torch.norm(weight,dim=-1)
+                        
+                    
+                        
+
                     n_vocab=norm.size()[0]
                     norm=torch.reshape(norm,(n_vocab,1)).expand(n_vocab,self.output_embed_dim)
-                #print(torch.norm(self.embed_tokens.weight/norm,dim=-1))
-                    x=F.linear(x,self.embed_tokens.weight/norm) 
+                    #print(torch.norm(self.embed_tokens.weight/norm,dim=-1))
+                    weight=weight/norm
+                    x=F.linear(x,weight/norm) 
                 elif self.embedding_normalization==2:
                     bias=-0.5*(torch.norm(self.embed_tokens.weight,dim=-1)**2)
                     if self.padding_idx !=None:
@@ -432,7 +441,7 @@ class LightConvDecoder(FairseqIncrementalDecoder):
                 elif self.embedding_normalization==4:
                     squarenorm=(torch.norm(self.embed_tokens.weight,dim=-1))**2
                 #bnorm=torch.norm(self.embed_tokens.weight,dim=-1)
-                    if self.padding_idx>=0:
+                    if self.padding_idx!=None:
                         squarenorm[self.padding_idx]=1
                     n_vocab=squarenorm.size()[0]
                     

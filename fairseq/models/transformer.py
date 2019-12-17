@@ -763,7 +763,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 else:
                     if self.embedding_normalization==1:
                         weight=self.embed_tokens.weight
-                        '''
+                        
                         if self.padding_idx != None:
                             pid=self.padding_idx if self.padding_idx>=0 else self.embed_tokens.weight.size()[0]+self.padding_idx
                             if weight.data.type()=="torch.float16":
@@ -773,18 +773,14 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                             norm=torch.cat([torch.norm(weight[:pid],dim=-1),torch.tensor([1.0],device='cuda',dtype=dtype),torch.norm(weight[pid+1:],dim=-1)])
                         else:
                             norm=torch.norm(weight,dim=-1)
-                        '''
-                        norm=torch.norm(self.embed_tokens.weight,dim=-1)
-                        print(self.padding_idx)
-                        if self.padding_idx != None:
-
-                            norm[self.padding_idx]=1
+                        
+                    
                         
 
                         n_vocab=norm.size()[0]
                         norm=torch.reshape(norm,(n_vocab,1)).expand(n_vocab,self.output_embed_dim)
                     #print(torch.norm(self.embed_tokens.weight/norm,dim=-1))
-                        weight=self.embed_tokens.weight/norm
+                        weight=weight/norm
                         return F.linear(features,weight) 
                     elif self.embedding_normalization==2:
                         bias=-0.5*(torch.norm(self.embed_tokens.weight,dim=-1)**2)
@@ -795,7 +791,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                         squarenorm=(torch.norm(self.embed_tokens.weight,dim=-1))**2
                     #bnorm=torch.norm(self.embed_tokens.weight,dim=-1)
                         if self.padding_idx!=None:
-                            print(self.padding_idx)
+
                             squarenorm[self.padding_idx]=1
                         n_vocab=squarenorm.size()[0]
                      
