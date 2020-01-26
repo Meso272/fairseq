@@ -119,6 +119,9 @@ class TransformerLanguageModel(FairseqLanguageModel):
         parser.add_argument('--input_proj_normalization',type=int,metavar='N')
         parser.add_argument('--output_embed_normalization',type=int,metavar='N')
         parser.add_argument('--output_proj_normalization',type=int,metavar='N')
+        parser.add_argument('--fac_embed',type=int,help='use_factorized_embedding',metavar='N')
+        parser.add_argument('--d_embed',type=int,help='inner embed dim', metavar='N')
+        parser.add_argument('--ortho_init',type=int,help='orthoinit', metavar='N')
         # fmt: on
 
     @classmethod
@@ -214,6 +217,9 @@ def base_lm_architecture(args):
     args.output_embed_normalization=getattr(args,'output_embed_normalization',0)
     args.output_proj_normalization=getattr(args,'output_proj_normalization',0)
     args.outer_embed_normalization=getattr(args,'outer_embed_normalization',0)#deprecated
+    args.fac_embed=getattr(args,'fac_embed',0)#useless
+    args.d_embed=getattr(args,'d_embed',512)#useless
+    args.ortho_init=getattr(args,'ortho_init',0)#depre
 
 @register_model_architecture('transformer_lm', 'transformer_lm_big')
 def transformer_lm_big(args):

@@ -909,6 +909,7 @@ def base_architecture(args):
     args.no_cross_attention = getattr(args, 'no_cross_attention', False)
     args.cross_self_attention = getattr(args, 'cross_self_attention', False)
     args.layer_wise_attention = getattr(args, 'layer_wise_attention', False)
+    
     args.ortho_init=getattr(args,'ortho_init',0)
     args.embedding_normalization=getattr(args,'embedding_normalization',0)
     args.decoder_output_dim = getattr(args, 'decoder_output_dim', args.decoder_embed_dim)
