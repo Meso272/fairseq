@@ -208,6 +208,7 @@ def base_lm_architecture(args):
 
     args.no_scale_embedding = getattr(args, 'no_scale_embedding', False)
     args.layernorm_embedding = getattr(args, 'layernorm_embedding', False)
+    args.embedding_normalization=getattr(args,'embedding_normalization',0)
     args.input_embed_normalization=getattr(args,'input_embed_normalization',0)
     args.input_proj_normalization=getattr(args,'input_proj_normalization',0)
     args.output_embed_normalization=getattr(args,'input_embed_normalization',0)
