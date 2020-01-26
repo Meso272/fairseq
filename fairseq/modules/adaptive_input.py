@@ -44,9 +44,9 @@ class AdaptiveInput(nn.Module):
                 nn.Embedding(size, dim, padding_idx),
                 nn.Linear(dim, output_dim, bias=False)
             )
-            if (i==0 and head_embed_normalization>0) or (i>0 and head_embed_normalization==2):
+            if (i==0 and embed_normalization>0) or (i>0 and embed_normalization==2):
                 seq[0].weight.data=F.normalize(seq[0].weight,dim=-1)
-            if i>0 and tail_proj_normalization:
+            if i>0 and proj_normalization:
                 seq[1].weight.data=F.normalize(seq[1].weight,dim=-1)                
             self.embeddings.append(seq)
 

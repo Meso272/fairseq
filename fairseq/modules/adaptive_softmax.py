@@ -38,7 +38,25 @@ class TiedLinear(nn.Module):
                 norm=torch.reshape(norm,(n_vocab,1)).expand(n_vocab,d_embed)
             self.weight=weight/norm
         elif normalization==2:
-            pass
+            if transpose:
+                norm_dim=0
+                vocab_dim=-1
+            else:
+                norm_dim=-1
+                vocab_dim=0
+            if padding_idx != None:
+                id=self.padding_idx if self.padding_idx>=0 else self.embed_tokens.weight.size()[0]+self.padding_idx
+                norm=torch.cat([torch.norm(weight[:pid],dim=-1),torch.tensor([1.0],device='cuda'),torch.norm(weight[pid+1:],dim=norm_dim)])
+            else:
+                norm=torch.norm(weight,dim=norm_dim)
+            n_vocab=weight.size()[vocab_dim]
+            d_embed=weight.size()[norm_dim]
+            norm=norm**2
+            if transpose:
+                norm=torch.reshape(norm,(1,n_vocab)).expand(d_embed,n_vocab)
+            else:
+                norm=torch.reshape(norm,(n_vocab,1)).expand(n_vocab,d_embed)
+            self.weight=weight/norm
         else:
             self.weight=weight
         if normalization==3:
