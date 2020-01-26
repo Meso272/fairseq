@@ -149,6 +149,8 @@ class TransformerModel(FairseqEncoderDecoderModel):
                             help='add layernorm to embedding')
         parser.add_argument('--no-scale-embedding', action='store_true',
                             help='if True, dont scale embeddings')
+        parser.add_argument('--input_embed_normalization',type=int,metavar='N')
+        parser.add_argument('--input_proj_normalization',type=int,metavar='N')
         parser.add_argument('--output_embed_normalization',type=int,metavar='N')
         parser.add_argument('--output_proj_normalization',type=int,metavar='N')
         # fmt: on
@@ -917,8 +919,9 @@ def base_architecture(args):
     args.fac_embed=getattr(args,'fac_embed',0)
     args.d_embed=getattr(args,'d_embed',512)
     args.outer_embed_normalization=getattr(args,'outer_embed_normalization',0)
-
-    args.output_embed_normalization=getattr(args,'input_embed_normalization',0)
+    args.input_embed_normalization=getattr(args,'input_embed_normalization',0)
+    args.input_proj_normalization=getattr(args,'input_proj_normalization',0)
+    args.output_embed_normalization=getattr(args,'output_embed_normalization',0)
     args.output_proj_normalization=getattr(args,'output_proj_normalization',0)
 @register_model_architecture('transformer', 'transformer_iwslt_de_en')
 def transformer_iwslt_de_en(args):

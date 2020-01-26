@@ -211,8 +211,9 @@ def base_lm_architecture(args):
     args.embedding_normalization=getattr(args,'embedding_normalization',0)
     args.input_embed_normalization=getattr(args,'input_embed_normalization',0)
     args.input_proj_normalization=getattr(args,'input_proj_normalization',0)
-    args.output_embed_normalization=getattr(args,'input_embed_normalization',0)
+    args.output_embed_normalization=getattr(args,'output_embed_normalization',0)
     args.output_proj_normalization=getattr(args,'output_proj_normalization',0)
+    args.outer_embed_normalization=getattr(args,'outer_embed_normalization',0)#deprecated
 
 @register_model_architecture('transformer_lm', 'transformer_lm_big')
 def transformer_lm_big(args):
